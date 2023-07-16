@@ -26,7 +26,7 @@ public class AuthController : ControllerBase
 
 
     [HttpGet]
-    [Authorize(Roles = "admin, editor")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> Get()
     {
         var user = await _dbContext.Users.ToListAsync();
@@ -34,9 +34,17 @@ public class AuthController : ControllerBase
     }
 
     [HttpGet("{id}", Name = "GetById")]
-    [Authorize(Roles = "admin, editor")]
+    [Authorize(Roles = "admin, editor, user")]
     public async Task<IActionResult> Get(int id)
     {
+        int claimedId = Convert.ToInt32( User.FindFirst(ClaimTypes.NameIdentifier)!.Value );
+        var claimedRole = User.FindFirst(ClaimTypes.Role)!.Value;
+
+        if (id != claimedId && claimedRole != "admin")
+        {
+            return Forbid();
+        }
+
         var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
         {
@@ -46,6 +54,19 @@ public class AuthController : ControllerBase
 
     }
 
+    [AllowAnonymous]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+        _dbContext.Users.Remove(user);
+        await _dbContext.SaveChangesAsync();
+        return NoContent();
+    }
 
     [AllowAnonymous]
     [HttpPost("/register")]
@@ -135,7 +156,8 @@ public class AuthController : ControllerBase
 
         var claims = new Claim[]
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Name),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Name),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim(ClaimTypes.Email, user.EmailAddress),
         };
